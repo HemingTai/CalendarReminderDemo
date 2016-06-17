@@ -10,7 +10,9 @@
 #import <EventKit/EventKit.h>
 
 @interface ViewController ()
-
+{
+    EKEventStore *eventStore;
+}
 @end
 
 @implementation ViewController
@@ -26,6 +28,9 @@
     [btn setTitle:@"提醒" forState:UIControlStateNormal];
     [btn addTarget:self action:@selector(btnAction:) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:btn];
+    
+    //事件库对象需要相对较大量的时间来初始化和释放,因此,应该在应用加载时,初始化一个事件库,然后反复地使用这一个来确保连接一直可用。
+    eventStore = [[EKEventStore alloc] init];
 }
 
 - (void)didReceiveMemoryWarning
@@ -40,11 +45,10 @@
                   location:(NSString*)location
                 isReminder:(BOOL)isReminder
 {
-    //事件库
-    EKEventStore *eventStore = [[EKEventStore alloc] init];
     //写⼊入事件
     if ([eventStore respondsToSelector:@selector(requestAccessToEntityType:completion:)])
     {
+        __weak typeof(self)WeakSelf = self;
         //等待用户授权访问日历
         //EKEntityMaskEvent/Reminder:事件/提醒（该参数只能真机使用）  EKEntityTypeEvent/Reminder:事件/提醒
         [eventStore requestAccessToEntityType:EKEntityTypeEvent completion:^(BOOL granted, NSError *error)
@@ -65,6 +69,7 @@
                                     {
                                         if(startDate && endDate)
                                         {
+                                            [WeakSelf deleteInsertedEvent];
                                             //根据开始时间和结束时间创建谓词
                                             NSPredicate *predicate = [eventStore predicateForEventsWithStartDate:startDate endDate:endDate calendars:nil];
                                             if(predicate)
@@ -133,7 +138,35 @@
 {
     NSDate *startDate = [NSDate dateWithTimeIntervalSinceNow:20];
     NSDate *endDate   = [NSDate dateWithTimeIntervalSinceNow:300];
-    [self saveEventStartDate:startDate endDate:endDate alarm:-5 eventTitle:@"5元优惠券即将到期" location:@"尊敬的用户，您有一张5元优惠券即将到期！（详情以优惠券中心实际展示为准）" isReminder: NO];
+    [self saveEventStartDate:startDate endDate:endDate alarm:-5 eventTitle:@"6元优惠券即将到期" location:@"尊敬的用户，您有一张6元优惠券即将到期！（详情以优惠券中心实际展示为准）" isReminder: NO];
+}
+
+//! 删除之前插入的事件
+- (void)deleteInsertedEvent
+{
+    BOOL isClear = [[NSUserDefaults standardUserDefaults]boolForKey:@"CLEAR"];
+    if(!isClear)
+    {
+        NSDateFormatter *formatter = [[NSDateFormatter alloc]init];
+        formatter.dateFormat = @"yyyyMMddHHmmss";
+        NSDate *startDate = [formatter dateFromString:@"20160101000000"];
+        NSDate *endDate = [formatter dateFromString:@"20161231235959"];
+        NSPredicate *predicate = [eventStore predicateForEventsWithStartDate:startDate endDate:endDate calendars:nil];
+        NSArray *eventsArray = [eventStore eventsMatchingPredicate:predicate];
+        if (eventsArray.count)
+        {
+            for (EKEvent *item in eventsArray)
+            {
+                NSRange range = [item.title rangeOfString:@"即将到期"];
+                if(range.location != NSNotFound)
+                {
+                    //删除老版本插入的提醒
+                    [eventStore removeEvent:item span:EKSpanThisEvent commit:YES error:nil];
+                }
+            }
+            [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"CLEAR"];
+        }
+    }
 }
 
 @end

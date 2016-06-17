@@ -300,6 +300,7 @@
 				76EFF5221D123C60009E4416 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
